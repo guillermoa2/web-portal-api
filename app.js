@@ -1,3 +1,14 @@
+const AWS = require('aws-sdk');
+// import * as AWS from 'aws-sdk';
+// import * as dotenvAWS from 'dotenv';
+const fs = require('fs');
+// import * as fs from 'fs';
+const util = require('util');
+// import * as util from 'util';
+const { v4: uuidv4 } = require('uuid');
+// import * as uuidv4 from 'uuid/v4';
+
+
 const express = require('express');
 // const bodyParser = require("body-parser");
 const jwt = require('jsonwebtoken');
@@ -6,6 +17,11 @@ const mysql = require('mysql2/promise');
 const dotenv = require('dotenv');
 dotenv.config({ path: './.env'});
 const bcrypt = require('bcrypt');
+
+const readFile = util.promisify(fs.readFile);
+
+// const BUCKET_NAME = 'guillermo-login-page-s3';
+
 const config = {
     host: process.env.host,
     user: process.env.user,
@@ -13,6 +29,24 @@ const config = {
     database: process.env.database,
     port: process.env.port
 };
+
+const BUCKET_NAME = process.env.BUCKET_NAME
+
+const s3 = new AWS.S3({
+    region: process.env.AWS_REGION,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    SIGNATURE_VERSION: process.env.SIGNATURE_VERSION,
+});
+
+async function listFiles() {
+    const result = await s3.listObjectsV2({
+    Bucket: BUCKET_NAME
+    }).promise();
+
+    return result;
+}
+
 
 const app = express();
 
@@ -32,18 +66,18 @@ app.get('/api', (req, res) => {
     });
 });
 
-app.post('/api/posts', verifyToken, (req, res) => {
-    jwt.verify(req.token, 'secretkey', (err, authData) => {
-        if (err) {
-            res.sendStatus(403);
-        } else {
-            res.json({
-                message: 'Post created...',
-                authData
-            });
-        }
-    });
-});
+// app.post('/api/posts', verifyToken, (req, res) => {
+//     jwt.verify(req.token, 'secretkey', (err, authData) => {
+//         if (err) {
+//             res.sendStatus(403);
+//         } else {
+//             res.json({
+//                 message: 'Post created...',
+//                 authData
+//             });
+//         }
+//     });
+// });
 
 app.post('/login', async (req, res) => {
     // Mock user
@@ -125,28 +159,121 @@ app.post('/register', async function (req, res) {
     }
     });
 
-// Verify Token
-function verifyToken(req, res, next) {
-    // Get auth header value
-    const bearerHeader = req.headers['authorization'];
-    // Check if bearer is undefined
-    if (typeof bearerHeader !== 'undefined') {
-        // Split at the space
-        const bearer = bearerHeader.split(' ');
-        // Get token from array
-        const bearerToken = bearer[1];
-        // Set the token
-        req.token = bearerToken;
-        // Next middleware
-        next();
-    } else {
-        // forbidden
-        res.sendStatus(403);
-    }
-}
+    // Verify Token
+    app.use(async function verifyToken(req, res, next) {
+        // Get auth header value
+        console.log('this is req.headers',req.headers)
+        const bearerHeader = req.headers['authorization'];
+        console.log('this is bearerHeader',bearerHeader);
+        // Check if bearer is undefined
+        if (bearerHeader) {
+            // Split at the space
+            const bearer = bearerHeader.split(' ');
+            // Get token from array
+            const bearerToken = bearer[1];
+            // Set the token
+            req.token = bearerToken;
+            // Next middleware
+            next();
+        } else {
+            // forbidden
+            res.sendStatus(403);
+        }
+    });
+
+    app.post('/upload', async function (req, res) {
+        try {
+            // console.log('api upload')
+            // console.log('req.body is',req.body);
+            console.log('req.body.image is ',req.body.image)
+
+            const uploadToS3 = async (data) => {
+                const name = uuidv4();
+                console.log('uploadToS3 data',data)
+                buffer = Buffer.from(data.replace(/^data:image\/\w+;base64,/,""),'base64');
+                console.log("this is name",name);
+                // console.log(req.body)
+                // await s3.putObject({
+                //     Key: name,
+                //     Bucket: BUCKET_NAME,
+                //     ContentType: 'image/png',
+                //     Body: buffer,
+                //     ACL: 'public-read',
+                // }).promise();
+                console.log('upload buffer', buffer)
+                
+                await s3.upload({
+                    Key: name,
+                    Bucket: BUCKET_NAME,
+                    ContentType: 'image/png',
+                    Body: buffer,
+                    // ACL: 'public-read',
+                }).promise()
+                return name;
+            }
+
+            const main = async () => {
+                try {
+                    // const data = await readFile(req.body.image); // needs image
+                    console.log('main .data',req.body.data)
+                    const data = req.body.image
+                    const url = await uploadToS3(data);
+                    return url
+                    // console.log('url');
+                } catch (err) {
+                    console.log(err);
+                };
+
+            }
+
+            const result = await main(); 
+            res.json({result});
+            
+        } catch (err) {
+            console.log('err', err)
+            res.json({result: null})
+        }
+    });
 
 
+    app.get('/download', async function (req, res) {
+        
+        const keyNames = await listFiles()
+        // console.log(keyNames)
+        const images = [];
 
+        for (const image of keyNames.Contents) {
+            const params = {
+                Bucket: BUCKET_NAME,
+                Key: image.Key,
+            }
+            const signedUrl = await s3.getSignedUrl('getObject', params);
+    
+            images.push({
+                name: image.Key,
+                image: signedUrl,
+            })
+        }
+
+        res.send(images);
+    })
+
+    app.post('/delete', async function (req, res) {
+        const key = req.body.key;
+        const images = await listFiles();
+        const deletePromises = [];
+        
+        for (image of images.Contents)  {
+            const params = {
+                Bucket: BUCKET_NAME,
+                Key: key,
+            }
+
+            deletePromises.push(await s3.deleteObject(params).promise());
+        }
+
+        res.send(Promise.all(deletePromises));
+    })
 
 
 // require("./user.routes.js")(app);            ///sample of how files should be split
