@@ -18,6 +18,10 @@ const dotenv = require('dotenv');
 dotenv.config({ path: './.env'});
 const bcrypt = require('bcrypt');
 
+const jimp = require('jimp');
+const { resize } = require('jimp');
+
+
 const readFile = util.promisify(fs.readFile);
 
 // const BUCKET_NAME = 'guillermo-login-page-s3';
@@ -162,9 +166,10 @@ app.post('/register', async function (req, res) {
     // Verify Token
     app.use(async function verifyToken(req, res, next) {
         // Get auth header value
-        console.log('this is req.headers',req.headers)
+        // console.log(req.method)
+        // console.log('this is req.headers',req.headers)
         const bearerHeader = req.headers['authorization'];
-        console.log('this is bearerHeader',bearerHeader);
+        // console.log('this is bearerHeader',bearerHeader);
         // Check if bearer is undefined
         if (bearerHeader) {
             // Split at the space
@@ -177,6 +182,7 @@ app.post('/register', async function (req, res) {
             next();
         } else {
             // forbidden
+            console.log('rejected jwt req')
             res.sendStatus(403);
         }
     });
@@ -185,50 +191,41 @@ app.post('/register', async function (req, res) {
         try {
             // console.log('api upload')
             // console.log('req.body is',req.body);
-            console.log('req.body.image is ',req.body.image)
+            // console.log('req.body.image is ',req.body.image)
 
             const uploadToS3 = async (data) => {
+                const sizes = [1,.5,.25,.1];
                 const name = uuidv4();
-                console.log('uploadToS3 data',data)
                 buffer = Buffer.from(data.replace(/^data:image\/\w+;base64,/,""),'base64');
-                console.log("this is name",name);
-                // console.log(req.body)
-                // await s3.putObject({
-                //     Key: name,
-                //     Bucket: BUCKET_NAME,
-                //     ContentType: 'image/png',
-                //     Body: buffer,
-                //     ACL: 'public-read',
-                // }).promise();
-                console.log('upload buffer', buffer)
                 
-                await s3.upload({
-                    Key: name,
-                    Bucket: BUCKET_NAME,
-                    ContentType: 'image/png',
-                    Body: buffer,
-                    // ACL: 'public-read',
-                }).promise()
+                const uploads = [];
+                for (const size of sizes){
+                    const jimpImage = await jimp.read(buffer);
+                    jimpImage.scale(size);
+                    const imageBuffer = await jimpImage.getBufferAsync(jimp.MIME_PNG);
+                    uploads.push(s3.upload({
+                        Key: name,
+                        Bucket: `${BUCKET_NAME}/sizes/${size*100}_percent/`,
+                        ContentType: 'image/png',
+                        Body: imageBuffer,
+                    }).promise());
+                }
+                await Promise.all(uploads);
+                console.log("returning name");
                 return name;
             }
 
             const main = async () => {
                 try {
-                    // const data = await readFile(req.body.image); // needs image
-                    console.log('main .data',req.body.data)
-                    const data = req.body.image
-                    const url = await uploadToS3(data);
-                    return url
-                    // console.log('url');
+                    return await uploadToS3(req.body.image);
                 } catch (err) {
                     console.log(err);
                 };
-
             }
 
             const result = await main(); 
             res.json({result});
-            
+
         } catch (err) {
             console.log('err', err)
             res.json({result: null})
@@ -259,14 +256,16 @@ app.post('/register', async function (req, res) {
     })
 
     app.post('/delete', async function (req, res) {
-        const key = req.body.key;
+        console.log("req", req)
+        const documentObject = req.body;
+        console.log("documentObject", documentObject);
         const images = await listFiles();
         const deletePromises = [];
         
         for (image of images.Contents)  {
             const params = {
                 Bucket: BUCKET_NAME,
-                Key: key,
+                Key: documentObject.name,
             }
 
             deletePromises.push(await s3.deleteObject(params).promise());
