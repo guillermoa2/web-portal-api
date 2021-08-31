@@ -205,7 +205,7 @@ app.post('/register', async function (req, res) {
                     const imageBuffer = await jimpImage.getBufferAsync(jimp.MIME_PNG);
                     uploads.push(s3.upload({
                         Key: name,
-                        Bucket: `${BUCKET_NAME}/sizes/${size*100}_percent/`,
+                        Bucket: `${BUCKET_NAME}/sizes/${size*100}_percent`,
                         ContentType: 'image/png',
                         Body: imageBuffer,
                     }).promise());
@@ -235,11 +235,11 @@ app.post('/register', async function (req, res) {
 
     app.get('/download', async function (req, res) {
         
-        const keyNames = await listFiles()
-        // console.log(keyNames)
+        let keyNames = await listFiles()
+        keyNames = keyNames.Contents.filter(image => image.Key.startsWith(`sizes/25_percent`))
         const images = [];
 
-        for (const image of keyNames.Contents) {
+        for (const image of keyNames) {
             const params = {
                 Bucket: BUCKET_NAME,
                 Key: image.Key,
