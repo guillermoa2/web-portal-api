@@ -255,16 +255,34 @@ app.post('/register', async function (req, res) {
     })
 
     app.post('/delete', async function (req, res) {
-        console.log("req", req)
+        // console.log("req", req)
         const documentObject = req.body;
         console.log("documentObject", documentObject);
         const images = await listFiles();
+        console.log(images.Contents)
         const deletePromises = [];
+
+        const searchTerm = 'percent/';
+        const lengthOfSearchTerm = searchTerm.length;
+        const indexOfSearchTerm = documentObject.name.indexOf(searchTerm);
+        const splitStart = indexOfSearchTerm + lengthOfSearchTerm;
+        keyName = documentObject.name.slice(
+            splitStart, documentObject.name.length
+        );
+        console.log(keyName);
+
+        images.Contents = images.Contents.filter(
+            image => 
+                image.Key.includes(keyName)
+        )
+
+
+
         
         for (image of images.Contents)  {
             const params = {
                 Bucket: BUCKET_NAME,
-                Key: documentObject.name,
+                Key: image.Key,
             }
 
             deletePromises.push(await s3.deleteObject(params).promise());
