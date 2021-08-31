@@ -236,10 +236,9 @@ app.post('/register', async function (req, res) {
     app.get('/download', async function (req, res) {
         
         let keyNames = await listFiles()
-        keyNames = keyNames.Contents.filter(image => image.Key.startsWith(`sizes/25_percent`))
         const images = [];
 
-        for (const image of keyNames) {
+        for (const image of keyNames.Contents) {
             const params = {
                 Bucket: BUCKET_NAME,
                 Key: image.Key,
