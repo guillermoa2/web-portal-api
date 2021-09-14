@@ -21,6 +21,8 @@ const bcrypt = require('bcrypt');
 const jimp = require('jimp');
 const { resize } = require('jimp');
 
+const zoomService = require('./zoom.service');
+
 
 const readFile = util.promisify(fs.readFile);
 
@@ -123,7 +125,7 @@ app.post('/login', async (req, res) => {
 // Authorization: Bearer <access_token>
 
 
-// creata an endpoint to create a user & put in the Db
+// create an endpoint to create a user & put in the Db
 // should be POST & need email and password on req.body
 // encode the password
 app.post('/register', async function (req, res) {
@@ -259,17 +261,17 @@ app.post('/register', async function (req, res) {
         const documentObject = req.body;
         console.log("documentObject", documentObject);
         const images = await listFiles();
-        console.log(images.Contents)
+        // console.log(images.Contents)
         const deletePromises = [];
 
         const searchTerm = 'percent/';
         const lengthOfSearchTerm = searchTerm.length;
         const indexOfSearchTerm = documentObject.name.indexOf(searchTerm);
         const splitStart = indexOfSearchTerm + lengthOfSearchTerm;
-        keyName = documentObject.name.slice(
+        const keyName = documentObject.name.slice(
             splitStart, documentObject.name.length
         );
-        console.log(keyName);
+        // console.log(keyName);
 
         images.Contents = images.Contents.filter(
             image => 
@@ -290,6 +292,11 @@ app.post('/register', async function (req, res) {
 
         res.send(Promise.all(deletePromises));
     })
+
+    app.get('/meetings', zoomService.getAllMeetings);
+    app.post('/createMeeting', zoomService.addMeeting);
+    app.post('/cancelMeeting', zoomService.cancelMeeting);
+
 
 
 // require("./user.routes.js")(app);            ///sample of how files should be split
