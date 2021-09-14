@@ -159,6 +159,7 @@ app.post('/register', async function (req, res) {
     process.env.api_secret
     );
     
+    await connection.commit();
     res.json(encodedUser);
     } catch (err) {
     console.log('err', err)
@@ -295,7 +296,7 @@ app.post('/register', async function (req, res) {
 
     app.get('/meetings', zoomService.getAllMeetings);
     app.post('/createMeeting', zoomService.addMeeting);
-    app.post('/cancelMeeting', zoomService.cancelMeeting);
+    app.delete('/cancelMeeting', zoomService.cancelMeeting);
 
 
 

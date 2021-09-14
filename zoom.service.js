@@ -37,6 +37,18 @@ class zoomService {
             agenda: req.body.agenda
         });
 
+        if(req.body.attendees) {
+            for (const email of req.body.attendees) {
+                await connection.query(`
+                    INSERT INTO attendee (email, meeting_id)
+                    VALUES (:email, :meeting_id)
+                `, {
+                    email,
+                    meeting_id: meeting.insertId
+                })
+            }
+        }
+
         try {
             console.log('meeting', meeting)
         } catch (err) {
@@ -44,6 +56,7 @@ class zoomService {
         }
 
         // return 'done'
+        await connection.commit();
         res.send('addMeeting done')
     };
 
