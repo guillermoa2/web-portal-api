@@ -295,6 +295,7 @@ app.post('/register', async function (req, res) {
     })
 
     app.get('/meetings', zoomService.getAllMeetings);
+    app.get('/meetings/:id', zoomService.getMeetingContent);
     app.post('/createMeeting', zoomService.addMeeting);
     app.delete('/cancelMeeting', zoomService.cancelMeeting);
 
