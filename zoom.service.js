@@ -62,7 +62,7 @@ class zoomService {
         // console.log(existingMeetingNames, existingMeetingTimes)
         console.log(meetingsSorted)*/
         
-        res.json({meetings})
+        res.json(meetings)
     };
 
     static async getMeetingContent(req, res, next){
